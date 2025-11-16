@@ -1,0 +1,5 @@
+rootProject.name = 'krite'
+include 'api'
+include 'common'
+include 'coordinator'
+include 'executor'
