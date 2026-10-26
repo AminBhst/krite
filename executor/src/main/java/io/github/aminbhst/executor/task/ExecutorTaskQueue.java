@@ -15,9 +15,17 @@ public class ExecutorTaskQueue {
 
     public final List<CoordinatorProto.TaskStatus> taskStatuses = new CopyOnWriteArrayList<>();
 
-    public void addTaskStatus(CoordinatorProto.TaskStatus taskStatus) {
+    public synchronized void addTaskStatus(CoordinatorProto.TaskStatus taskStatus) {
         taskStatuses.removeIf(status -> status.getTaskId() == taskStatus.getTaskId());
         taskStatuses.add(taskStatus);
+    }
+
+    public synchronized List<CoordinatorProto.TaskStatus> statusSnapshot() {
+        return List.copyOf(taskStatuses);
+    }
+
+    public synchronized void acknowledgeStatuses(List<CoordinatorProto.TaskStatus> sent) {
+        taskStatuses.removeAll(sent);
     }
 
     public void pushTask(CoordinatorProto.TaskAssignment task) {

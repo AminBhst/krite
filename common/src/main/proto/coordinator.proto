@@ -46,12 +46,15 @@ message TaskStatus {
   int64 taskId = 1;
   string status = 2;
   string outputObjectKey = 3;
+  string videoObjectKey = 4;
 }
 
 message TaskAssignment {
   int64 taskId = 1;
   string taskType = 2;
   string sourceFileObjectKey = 3;
+  string model = 4;
+  bool burnSubtitles = 5;
 }
 
 message ExecutorInfo {

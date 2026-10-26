@@ -1,0 +1,40 @@
+services:
+  rustfs:
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-fc011b5e757cf26aaa5d83a303ebba263527fdc4f4a649a9febbc08bda34d19a}
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+      RUSTFS_CONSOLE_ENABLE: "true"
+    volumes:
+      - rustfs-data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:9000/health/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  rustfs-create-bucket:
+    image: rustfs/rc:latest
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-fc011b5e757cf26aaa5d83a303ebba263527fdc4f4a649a9febbc08bda34d19a}
+      RUSTFS_BUCKET: ${RUSTFS_BUCKET:-krite}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        /usr/bin/rc alias set rustfs http://rustfs:9000 "$${RUSTFS_ACCESS_KEY}" "$${RUSTFS_SECRET_KEY}"
+        /usr/bin/rc ls "rustfs/$${RUSTFS_BUCKET}" >/dev/null 2>&1 || /usr/bin/rc mb "rustfs/$${RUSTFS_BUCKET}"
+
+volumes:
+  rustfs-data:

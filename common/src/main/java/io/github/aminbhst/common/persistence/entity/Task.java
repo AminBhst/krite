@@ -25,6 +25,15 @@ public class Task {
 
     private String outputFileObjectKey;
 
+    private String originalFilename;
+
+    private Long fileSize;
+
+    private String transcriptionModel;
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean burnSubtitles;
+    private String videoFileObjectKey;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TaskStatus status = TaskStatus.INITIAL;
@@ -46,6 +55,8 @@ public class Task {
                 .setTaskId(this.getId())
                 .setSourceFileObjectKey(this.getSourceFileObjectKey())
                 .setTaskType(String.valueOf(this.getType()))
+                .setModel(transcriptionModel == null ? "" : transcriptionModel)
+                .setBurnSubtitles(burnSubtitles)
                 .build();
     }
 

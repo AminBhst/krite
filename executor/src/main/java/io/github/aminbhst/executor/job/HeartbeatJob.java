@@ -23,7 +23,10 @@ public class HeartbeatJob {
     public void execute() {
         log.info("HeartbeatJob executing");
         try {
-            coordinatorClient.sendHeartbeat();
+            if (!coordinatorClient.sendHeartbeat().getAlive()) {
+                coordinatorClient.registerExecutor();
+            }
+            heartbeatFailureCount = 0;
             log.info("Sent heartbeat to coordinator");
         } catch (Exception e) {
             heartbeatFailureCount++;

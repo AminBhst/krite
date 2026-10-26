@@ -31,8 +31,6 @@ dependencies {
 
     implementation 'com.github.luben:zstd-jni:1.5.6-9'
     implementation 'org.imgscalr:imgscalr-lib:4.2'
-    implementation 'io.minio:minio:8.6.0'
-
     compileOnly 'io.github.aminbhst:quartz-auto-config-boot:1.0.0'
     annotationProcessor 'io.github.aminbhst:quartz-auto-config-boot:1.0.0'
     compileOnly 'org.projectlombok:lombok'

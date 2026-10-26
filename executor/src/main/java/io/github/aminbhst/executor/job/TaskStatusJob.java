@@ -16,7 +16,9 @@ public class TaskStatusJob {
 
     @Scheduled(fixedDelay = 1000)
     public void execute() {
-        coordinatorClient.sendTaskStatuses(executorTaskQueue.taskStatuses);
-        executorTaskQueue.taskStatuses.clear();
+        var statuses = executorTaskQueue.statusSnapshot();
+        if (statuses.isEmpty()) return;
+        coordinatorClient.sendTaskStatuses(statuses);
+        executorTaskQueue.acknowledgeStatuses(statuses);
     }
 }

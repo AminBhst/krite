@@ -23,10 +23,12 @@ public class CoordinatorGrpcService extends CoordinatorGrpc.CoordinatorImplBase 
     private final ExecutorRegistry executorRegistry;
 
     private final TaskRepository taskRepository;
+    private final ExecutorTelemetry telemetry;
 
     @Override
     public void registerExecutor(CoordinatorProto.ExecutorInfo request, StreamObserver<CoordinatorProto.RegistrationResponse> responseObserver) {
         executorRegistry.addExecutor(request);
+        telemetry.register(request);
         var response = CoordinatorProto.RegistrationResponse.newBuilder()
                 .setSuccess(true)
                 .setMessage("Executor registered successfully: " + request.getExecutorId())
@@ -40,9 +42,10 @@ public class CoordinatorGrpcService extends CoordinatorGrpc.CoordinatorImplBase 
     @Override
     public void sendHeartbeat(CoordinatorProto.ExecutorHeartbeat request, StreamObserver<CoordinatorProto.HeartbeatResponse> responseObserver) {
         executorRegistry.recalculateExecutorsWeights(request);
+        telemetry.heartbeat(request);
         responseObserver.onNext(
                 CoordinatorProto.HeartbeatResponse.newBuilder()
-                        .setAlive(true)
+                        .setAlive(executorRegistry.contains(request.getId()))
                         .build()
         );
         responseObserver.onCompleted();
@@ -50,7 +53,7 @@ public class CoordinatorGrpcService extends CoordinatorGrpc.CoordinatorImplBase 
 
     @Override
     public void pollTasks(CoordinatorProto.TaskPollRequest request, StreamObserver<CoordinatorProto.TaskBatch> responseObserver) {
-        int maxTasks = Math.max(1, request.getMaxTasks());
+        int maxTasks = Math.clamp(request.getMaxTasks(), 1, 100);
         var tasks = executorRegistry.pollTasks(request.getExecutorId(), maxTasks);
         var tasksBatch = tasks.stream().map(Task::toTaskAssignment).toList();
         var batch = CoordinatorProto.TaskBatch.newBuilder()
@@ -60,6 +63,7 @@ public class CoordinatorGrpcService extends CoordinatorGrpc.CoordinatorImplBase 
         for (var task : tasks) {
             task.setStatus(TaskStatus.IN_EXECUTOR_QUEUE);
             task.setAssignedNode(request.getExecutorId());
+            task.setUpdatedAt(LocalDateTime.now());
         }
         taskRepository.saveAll(tasks);
 
@@ -80,6 +84,7 @@ public class CoordinatorGrpcService extends CoordinatorGrpc.CoordinatorImplBase 
             if (task.getStatus() != TaskStatus.COMPLETE) {
                 task.setStatus(TaskStatus.valueOf(taskStatus.getStatus()));
                 task.setOutputFileObjectKey(taskStatus.getOutputObjectKey());
+                task.setVideoFileObjectKey(taskStatus.getVideoObjectKey());
             }
             task.setUpdatedAt(LocalDateTime.now());
             taskRepository.save(task);

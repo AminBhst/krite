@@ -34,12 +34,10 @@ public class CompressTaskRunner extends TaskRunner {
             var out = new ByteArrayOutputStream();
             try (ZstdOutputStream zstdOut = new ZstdOutputStream(out)) {
                 input.transferTo(zstdOut);
-                return storageService.upload(
-                        new ByteArrayInputStream(out.toByteArray()),
-                        out.size(),
-                        "application/octet-stream"
-                );
             }
+            // Closing the compressor writes the final frame before we upload it.
+            return storageService.upload(new ByteArrayInputStream(out.toByteArray()),
+                    out.size(), "application/zstd");
         }
     }
 

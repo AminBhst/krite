@@ -2,6 +2,7 @@ package io.github.aminbhst.api.security;
 
 import io.github.aminbhst.api.service.UserService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,6 +14,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.config.http.SessionCreationPolicy;
 
 @Slf4j
 @Configuration
@@ -33,7 +35,12 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(errors -> errors
+                        .authenticationEntryPoint((req, res, ex) -> res.sendError(401))
+                        .accessDeniedHandler((req, res, ex) -> res.sendError(403)))
                 .authorizeHttpRequests(auth -> auth
+                        .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ERROR).permitAll()
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/public/**").permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN")
@@ -50,11 +57,13 @@ public class SecurityConfig {
     }
 
     @Bean
-    CommandLineRunner initDefaultUser(UserService userService) {
+    CommandLineRunner initDefaultUser(UserService userService,
+                                     @Value("${krite.admin.username}") String username,
+                                     @Value("${krite.admin.password}") String password) {
         return args -> {
-            if (userService.findByUsername("admin").isEmpty()) {
-                userService.createUser("admin", "1234", "ADMIN");
-                log.info("✅ Default admin user created: admin / 1234");
+            if (userService.findByUsername(username).isEmpty()) {
+                userService.createUser(username, password, "ADMIN");
+                log.info("Default admin user created: {}", username);
             }
         };
     }

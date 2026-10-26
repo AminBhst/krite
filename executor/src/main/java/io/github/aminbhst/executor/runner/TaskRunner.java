@@ -13,6 +13,7 @@ import java.util.Map;
 public abstract class TaskRunner implements Runnable {
 
     protected CoordinatorProto.TaskAssignment task;
+    protected String videoObjectKey = "";
 
     private final ExecutorLogRepository executorLogRepository;
 
@@ -37,12 +38,12 @@ public abstract class TaskRunner implements Runnable {
             addCompleteStatus(outputObjectKey);
         } catch (Exception e) {
             log.error("Failed to run task {} for taskId {}", getTaskType(), task.getTaskId(), e);
+            addStatusToQueue(TaskStatus.FAILED);
             ExecutorLog log = new ExecutorLog();
             log.setTaskId(task.getTaskId());
             log.setMessage("Failed to run task " + task.getTaskType());
-            log.setException(Map.of(e.getClass().getSimpleName(), e.getMessage()));
+            log.setException(Map.of(e.getClass().getSimpleName(), String.valueOf(e.getMessage())));
             executorLogRepository.save(log);
-            addStatusToQueue(TaskStatus.FAILED);
         }
     }
 
@@ -51,6 +52,7 @@ public abstract class TaskRunner implements Runnable {
                 .setTaskId(task.getTaskId())
                 .setStatus(TaskStatus.COMPLETE.toString())
                 .setOutputObjectKey(outputObjectKey)
+                .setVideoObjectKey(videoObjectKey)
                 .build();
         executorTaskQueue.addTaskStatus(taskStatus);
     }

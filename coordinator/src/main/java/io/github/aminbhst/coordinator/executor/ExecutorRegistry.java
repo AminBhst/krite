@@ -18,7 +18,8 @@ public class ExecutorRegistry {
     private final Map<String, CoordinatorProto.ExecutorInfo> executors = new ConcurrentHashMap<>();
     private final Map<String, BlockingDeque<Task>> executorTasks = new ConcurrentHashMap<>();
 
-    private final List<String> executorsWeighted = new ArrayList<>();
+    private volatile List<String> executorsWeighted = List.of();
+    private final Map<String, Long> heartbeats = new ConcurrentHashMap<>();
 
     private final AtomicInteger rrIndex = new AtomicInteger(0);
 
@@ -32,18 +33,21 @@ public class ExecutorRegistry {
                 .setCpuLoad(heartbeat.getCpuLoad())
                 .setMemoryFree(heartbeat.getMemoryFree());
         executors.put(heartbeat.getId(), newInfo.build());
+        heartbeats.put(heartbeat.getId(), System.currentTimeMillis());
         executorTasks.computeIfAbsent(heartbeat.getId(), k -> new LinkedBlockingDeque<>());
         rebuildWeights();
     }
 
     public void addExecutor(CoordinatorProto.ExecutorInfo executor) {
         executors.put(executor.getExecutorId(), executor);
+        heartbeats.put(executor.getExecutorId(), System.currentTimeMillis());
         executorTasks.computeIfAbsent(executor.getExecutorId(), k -> new LinkedBlockingDeque<>());
         rebuildWeights();
     }
 
     public void removeExecutor(String nodeId) {
         executors.remove(nodeId);
+        heartbeats.remove(nodeId);
         executorTasks.remove(nodeId);
         rebuildWeights();
     }
@@ -52,12 +56,15 @@ public class ExecutorRegistry {
      * Assigns a new task to the next executor based on weighted RR.
      */
     public String pushTask(Task task) {
+        rebuildWeights();
         if (executorsWeighted.isEmpty()) {
             System.err.println("No executors available to assign task: " + task.getId());
             return null;
         }
 
-        String nextId = getNextExecutorId();
+        List<String> weights = executorsWeighted;
+        if (weights.isEmpty()) return null;
+        String nextId = weights.get(Math.floorMod(rrIndex.getAndIncrement(), weights.size()));
         BlockingDeque<Task> queue = executorTasks.get(nextId);
         if (queue != null) {
             queue.offer(task);
@@ -95,17 +102,12 @@ public class ExecutorRegistry {
     /**
      * Weighted Round Robin scheduler logic.
      */
-    private String getNextExecutorId() {
-        int i = Math.abs(rrIndex.getAndIncrement() % executorsWeighted.size());
-        return executorsWeighted.get(i);
-    }
-
     /**
      * Recomputes weights and rebuilds the expanded executor list.
      */
     private synchronized void rebuildWeights() {
         if (executors.isEmpty()) {
-            executorsWeighted.clear();
+            executorsWeighted = List.of();
             return;
         }
 
@@ -119,14 +121,16 @@ public class ExecutorRegistry {
 
         Map<String, Integer> weights = computeWeights(maxCores, maxMemory);
 
-        executorsWeighted.clear();
+        List<String> newWeights = new ArrayList<>();
         for (Map.Entry<String, Integer> entry : weights.entrySet()) {
+            if (System.currentTimeMillis() - heartbeats.getOrDefault(entry.getKey(), 0L) > 10_000) continue;
             for (int i = 0; i < entry.getValue(); i++) {
-                executorsWeighted.add(entry.getKey());
+                newWeights.add(entry.getKey());
             }
         }
 
-        Collections.shuffle(executorsWeighted);
+        Collections.shuffle(newWeights);
+        executorsWeighted = List.copyOf(newWeights);
     }
 
     private Map<String, Integer> computeWeights(int maxCores, long maxMemory) {
@@ -137,9 +141,9 @@ public class ExecutorRegistry {
         Map<String, Integer> weights = new HashMap<>();
 
         for (CoordinatorProto.ExecutorInfo e : executors.values()) {
-            double coresScore = (double) e.getCpuCores() / maxCores;
-            double memoryScore = (double) e.getMemoryFree() / maxMemory;
-            double cpuScore = 1.0 - (e.getCpuLoad() / 100.0);
+            double coresScore = (double) e.getCpuCores() / Math.max(1, maxCores);
+            double memoryScore = (double) e.getMemoryFree() / Math.max(1, maxMemory);
+            double cpuScore = 1.0 - Math.clamp(e.getCpuLoad(), 0.0, 1.0);
 
             double totalScore = wCores * coresScore + wMemory * memoryScore + wCpuLoad * cpuScore;
 
@@ -158,5 +162,9 @@ public class ExecutorRegistry {
 
     public boolean isEmpty() {
         return executors.isEmpty();
+    }
+
+    public boolean contains(String id) {
+        return executors.containsKey(id);
     }
 }

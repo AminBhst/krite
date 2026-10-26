@@ -21,7 +21,14 @@ public class TaskDispatcher {
         Thread dispatcher = new Thread(() -> {
             while (!Thread.currentThread().isInterrupted()) {
                 var taskAssignment = taskQueue.pollTask();
-                if (taskAssignment == null) continue;
+                if (taskAssignment == null) {
+                    try {
+                        Thread.sleep(25);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    continue;
+                }
                 TaskRunner task = taskRunnerFactory.create(taskAssignment);
                 executorService.submit(task);
             }

@@ -31,7 +31,10 @@ public class TaskAssignmentJob {
         }
         List<Task> unassigned = taskService.findPendingTasks(Pageable.ofSize(50));
         for (Task task : unassigned) {
-            executorRegistry.pushTask(task);
+            String executorId = executorRegistry.pushTask(task);
+            if (executorId == null) continue;
+            task.setAssignedNode(executorId);
+            task.setUpdatedAt(java.time.LocalDateTime.now());
             task.setStatus(TaskStatus.IN_COORDINATOR_QUEUE);
             log.info("Assigning task {} to coordinator", task.getId());
         }
